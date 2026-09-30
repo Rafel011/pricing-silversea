@@ -157,10 +157,39 @@
     <div class="container view-section" id="view-comisiones">
       <div class="top-bar">
         <h2 id="titulo-comisiones">Mis comisiones</h2>
+        <select id="filtro-quarter" onchange="renderComisiones(this.value)" style="width:auto;min-width:160px"></select>
       </div>
       <div class="kpi-row" id="kpi-comisiones"></div>
-      <div class="card">
+
+      <div class="chart-card" style="margin-bottom:1.2rem">
+        <h3>Margen por cliente</h3>
+        <canvas id="chartMargenCliente"></canvas>
+      </div>
+
+      <div class="card" style="margin-bottom:1.2rem">
+        <div class="card-toolbar"><strong style="font-size:.85rem">Resumen por cliente</strong></div>
         <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Unidades</th>
+                <th>Compra €</th>
+                <th>Venta €</th>
+                <th>Margen €</th>
+              </tr>
+            </thead>
+            <tbody id="comisiones-resumen-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-toolbar">
+          <strong style="font-size:.85rem">Detalle por unidad</strong>
+          <button class="btn btn-outline btn-sm" onclick="toggleDetalleComisiones()" id="btn-toggle-detalle" style="width:auto">Mostrar detalle</button>
+        </div>
+        <div class="tbl-wrap" id="detalle-comisiones-wrap" style="display:none">
           <table>
             <thead>
               <tr>
@@ -288,6 +317,16 @@ function consultarAsesor(ciudad) {
       }
     }
 
+    function toggleDetalleComisiones() {
+      const wrap = document.getElementById("detalle-comisiones-wrap");
+      const visible = wrap.style.display !== "none";
+      wrap.style.display = visible ? "none" : "block";
+      document.getElementById("btn-toggle-detalle").innerText = visible ? "Mostrar detalle" : "Ocultar detalle";
+    }
+
+    let chartMargenCliente;
+    let comisionesRaw = [];
+
     async function cargarComisiones() {
       const { data: { user } } = await supabaseClient.auth.getUser();
       document.getElementById("th-comercial-com").style.display = esSupervisor ? "table-cell" : "none";
@@ -304,6 +343,21 @@ function consultarAsesor(ciudad) {
         document.getElementById("comisiones-empty").innerText = "Error: " + error.message;
         return;
       }
+
+      comisionesRaw = filas;
+
+      const quarters = [...new Set(filas.map(f => f.quarter))].sort().reverse();
+      const select = document.getElementById("filtro-quarter");
+      select.innerHTML = quarters.map(q => `<option value="${q}">${q}</option>`).join('');
+      if (quarters.length > 1) {
+        select.innerHTML = `<option value="__todos__">Todos los trimestres</option>` + select.innerHTML;
+      }
+
+      renderComisiones(quarters[0] || "__todos__");
+    }
+
+    function renderComisiones(quarter) {
+      const filas = quarter === "__todos__" ? comisionesRaw : comisionesRaw.filter(f => f.quarter === quarter);
 
       const tbody = document.getElementById("comisiones-body");
       tbody.innerHTML = "";
@@ -334,6 +388,50 @@ function consultarAsesor(ciudad) {
         <div class="kpi"><div class="kpi-label">Venta total</div><div class="kpi-val">${totalVenta.toLocaleString('es-ES',{maximumFractionDigits:0})} €</div></div>
         <div class="kpi"><div class="kpi-label">Margen total</div><div class="kpi-val">${totalMargen.toLocaleString('es-ES',{maximumFractionDigits:0})} €</div></div>
       `;
+
+      // ===== Resumen por cliente =====
+      const porCliente = {};
+      filas.forEach(f => {
+        const clave = f.client || '(sin cliente)';
+        if (!porCliente[clave]) porCliente[clave] = { unidades: 0, compra: 0, venta: 0, margen: 0 };
+        porCliente[clave].unidades += 1;
+        porCliente[clave].compra += f.compra_eur || 0;
+        porCliente[clave].venta += f.venta_eur || 0;
+        porCliente[clave].margen += f.margen_eur || 0;
+      });
+      const clientesOrdenados = Object.entries(porCliente).sort((a, b) => b[1].margen - a[1].margen);
+
+      const resumenBody = document.getElementById("comisiones-resumen-body");
+      resumenBody.innerHTML = "";
+      clientesOrdenados.forEach(([cliente, datos]) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${cliente}</td>
+          <td>${datos.unidades}</td>
+          <td>${datos.compra.toFixed(2)}</td>
+          <td>${datos.venta.toFixed(2)}</td>
+          <td>${datos.margen.toFixed(2)}</td>
+        `;
+        resumenBody.appendChild(tr);
+      });
+
+      // ===== Gráfico margen por cliente (top 15) =====
+      const top = clientesOrdenados.slice(0, 15);
+      const ctx = document.getElementById("chartMargenCliente");
+      if (chartMargenCliente) chartMargenCliente.destroy();
+      chartMargenCliente = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: top.map(([cliente]) => cliente),
+          datasets: [{ label: 'Margen €', data: top.map(([, d]) => d.margen), backgroundColor: '#2563eb', borderRadius: 4 }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: { x: { beginAtZero: true } }
+        }
+      });
     }
 
     async function mostrarTabla() {
@@ -661,4 +759,5 @@ function crearFila(fila) {
   </script>
 </body>
 </html>
+
 
