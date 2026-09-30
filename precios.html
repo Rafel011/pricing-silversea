@@ -94,6 +94,9 @@
       <div class="top-bar">
         <h2 id="titulo-tabla">Mis previsiones de precio</h2>
         <button id="btn-anadir" class="btn btn-primary btn-sm" onclick="anadirFila()" style="width:auto">+ Añadir ciudad</button>
+<button id="btn-cargar" class="btn btn-outline btn-sm" onclick="cargarCiudadesSugeridas()" style="width:auto">Cargar mis ciudades</button>
+<button id="btn-guardar-todo" class="btn btn-outline btn-sm" onclick="guardarTodasNuevas()" style="width:auto">Guardar todas</button>
+
       </div>
 
       <div class="card">
@@ -148,6 +151,49 @@
     const SUPABASE_ANON_KEY = "sb_publishable_zw7xIIl2QNVE0D34VcDSVg_r5uMdMjo";
 
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// ===== ASESOR DE PRECIOS (sin IA, basado en datos históricos reales) =====
+const REFERENCIA_PRECIOS = {
+  'barcelona':     { venta_usd: 1568, compra_usd: 1117 },
+  'valencia':      { venta_usd: 1708, compra_usd: 1029 },
+  'rotterdam':     { venta_usd: 2035, compra_usd: null },
+  'algeciras':     { venta_usd: 2035, compra_usd: 1626 },
+  'bilbao':        { venta_usd: 2093, compra_usd: 1497 },
+  'leixoes':       { venta_usd: 1684, compra_usd: 1559 },
+  'madrid':        { venta_usd: 1894, compra_usd: 1004 },
+  'vitoria':       { venta_usd: 1560, compra_usd: 1542 },
+  'cartagena':     { venta_usd: 2016, compra_usd: 1018 },
+  'buenos aires':  { venta_usd: 1960, compra_usd: 1550 },
+  'puerto limon':  { venta_usd: 2190, compra_usd: 1170 },
+  'caucedo':       { venta_usd: 2171, compra_usd: 994 },
+  'santos':        { venta_usd: 1500, compra_usd: null },
+  'paranaguá':     { venta_usd: 1475, compra_usd: null },
+  'itapoá':        { venta_usd: 1369, compra_usd: 1019 },
+  'montevideo':    { venta_usd: 1934, compra_usd: 1450 },
+  'manaus':        { venta_usd: 1580, compra_usd: null },
+  'ecatepec':      { venta_usd: 1075, compra_usd: 400 },
+  'san antonio':   { venta_usd: 1350, compra_usd: 1000 },
+  'jebel ali':     { venta_usd: 1450, compra_usd: 1350 },
+  'genoa':         { venta_usd: null, compra_usd: 1189 },
+  'haiphong':      { venta_usd: null, compra_usd: 1350 },
+  'shanghai':      { venta_usd: null, compra_usd: 1550 },
+  'shenzhen':      { venta_usd: null, compra_usd: 1550 }
+};
+
+function normalizar(texto) {
+  return (texto || '').trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function consultarAsesor(ciudad) {
+  const clave = Object.keys(REFERENCIA_PRECIOS).find(k => normalizar(k) === normalizar(ciudad));
+  if (!clave) return null;
+  const ref = REFERENCIA_PRECIOS[clave];
+  const sugerido = ref.venta_usd
+    ? Math.round(ref.venta_usd)
+    : (ref.compra_usd ? Math.round(ref.compra_usd * 1.25) : null);
+  return { ...ref, sugerido };
+}
+
 
     function toggleTheme() {
       const root = document.documentElement;
@@ -198,6 +244,9 @@
       document.getElementById("app-tabla").style.display = "block";
       document.getElementById("nombre-usuario").innerText = user.email + (esSupervisor ? " (supervisor)" : "");
       document.getElementById("btn-anadir").style.display = esSupervisor ? "none" : "inline-block";
+document.getElementById("btn-cargar").style.display = esSupervisor ? "none" : "inline-block";
+document.getElementById("btn-guardar-todo").style.display = esSupervisor ? "none" : "inline-block";
+
       document.getElementById("titulo-tabla").innerText = esSupervisor
         ? "Previsiones de todos los comerciales"
         : "Mis previsiones de precio";
@@ -320,7 +369,72 @@
       });
     }
 
-    function crearFila(fila) {
+ function mostrarAsesor(input) {
+  const tr = input.closest("tr");
+  const hint = tr.querySelector(".f-asesor");
+  const info = consultarAsesor(input.value);
+  if (!info || !info.sugerido) {
+    hint.innerText = "";
+    return;
+  }
+  hint.innerText = "💡 Sugerido: ~$" + info.sugerido +
+    (info.venta_usd ? " (venta real media $" + info.venta_usd + ")" : "") +
+    (info.compra_usd ? ", coste compra $" + info.compra_usd : "");
+}
+
+
+const CIUDADES_POR_REGION = {
+  eu: ['Barcelona','Valencia','Rotterdam','Algeciras','Bilbao','Leixoes','Madrid','Vitoria'],
+  latam: ['Cartagena','Buenos Aires','Puerto Limon','Caucedo','Santos','Paranaguá','Itapoá','Montevideo','Manaus','Ecatepec','San Antonio']
+};
+const EMAIL_REGION = {
+  'fportela@silverseacontainers.com': 'eu'
+};
+
+
+
+async function guardarTodasNuevas() {
+  const filas = [...document.querySelectorAll("#tabla-body tr")];
+  for (const tr of filas) {
+    const boton = tr.querySelector("button.btn-primary");
+    if (boton) await guardarFila(boton);
+  }
+}
+async function cargarCiudadesSugeridas() {
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  const region = EMAIL_REGION[user.email];
+  if (!region) {
+    setMensaje("mensaje-tabla", "No hay ciudades predefinidas para tu usuario todavía.", "error");
+    return;
+  }
+  const hoy = new Date().toISOString().slice(0, 10);
+  const filasActuales = [...document.querySelectorAll("#tabla-body tr")];
+  const yaHoy = filasActuales
+    .filter(tr => tr.querySelector(".f-date") && tr.querySelector(".f-date").value === hoy)
+    .map(tr => normalizar(tr.querySelector(".f-city").value));
+
+  const tbody = document.getElementById("tabla-body");
+  document.getElementById("empty-state").style.display = "none";
+
+  CIUDADES_POR_REGION[region].forEach(ciudad => {
+    if (yaHoy.includes(normalizar(ciudad))) return;
+    const info = consultarAsesor(ciudad);
+    const tr = crearFila({
+      city: ciudad,
+      region: region,
+      currency: region === 'eu' ? 'EUR' : 'USD',
+      forecast_date: hoy,
+      forecast_price: info ? info.sugerido : ''
+    });
+    tbody.appendChild(tr);
+    mostrarAsesor(tr.querySelector(".f-city"));
+  });
+  setMensaje("mensaje-tabla", "Ciudades cargadas para hoy. Revisa los precios y pulsa Guardar todas.", "success");
+}
+
+
+   
+function crearFila(fila) {
       const tr = document.createElement("tr");
       tr.dataset.id = fila.id || "";
       if (!fila.id) tr.classList.add("fila-nueva");
@@ -345,7 +459,11 @@
       const hoy = new Date().toISOString().slice(0, 10);
 
       tr.innerHTML = `
-        <td><input type="text" class="f-city" placeholder="Ej. Barcelona" value="${fila.city || ''}" /></td>
+        <td>
+  <input type="text" class="f-city" placeholder="Ej. Barcelona" value="${fila.city || ''}" oninput="mostrarAsesor(this)" />
+  <div class="f-asesor" style="font-size:.72rem;color:var(--accent);margin-top:.2rem"></div>
+</td>
+
         <td>
           <select class="f-region">
             <option value="eu" ${fila.region === 'eu' ? 'selected' : ''}>Europa</option>
