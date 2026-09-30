@@ -41,13 +41,17 @@
   .top-bar h2{font-size:1.05rem;margin:0}
   .user-chip{font-size:.8rem;color:var(--muted);margin-right:.6rem}
   .card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
-  .card-toolbar{padding:.9rem 1.1rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+  .card-toolbar{padding:.9rem 1.1rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:rgba(37,99,235,.04)}
   .tbl-wrap{overflow-x:auto}
   table{width:100%;border-collapse:collapse;font-size:.85rem;min-width:640px}
-  th{text-align:left;padding:.6rem .7rem;border-bottom:2px solid var(--border);font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600;white-space:nowrap}
-  td{padding:.5rem .5rem;border-bottom:1px solid var(--border)}
+  th{text-align:left;padding:.65rem .7rem;border-bottom:2px solid var(--accent);font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;white-space:nowrap;background:rgba(37,99,235,.05)}
+  td{padding:.55rem .7rem;border-bottom:1px solid var(--border)}
   tr:last-child td{border-bottom:none}
-  tr.fila-nueva td{background:rgba(37,99,235,.06)}
+  tbody tr:nth-child(even) td{background:rgba(100,116,139,.05)}
+  tbody tr:hover td{background:rgba(37,99,235,.08)}
+  tr.fila-nueva td{background:rgba(37,99,235,.1)!important}
+  .val-pos{color:var(--green);font-weight:600}
+  .val-neg{color:var(--red);font-weight:600}
   td input,td select{padding:.4rem .5rem;font-size:.83rem}
   .actions-cell{display:flex;gap:.4rem;white-space:nowrap}
   .empty-state{padding:2.5rem;text-align:center;color:var(--muted);font-size:.85rem}
@@ -57,15 +61,20 @@
   .chart-card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:1.1rem}
   .chart-card h3{font-size:.85rem;margin:0 0 .8rem;font-weight:700}
   canvas{max-height:320px}
-  .main-nav{display:flex;gap:0;background:var(--card);border-bottom:3px solid var(--border);padding:0 2rem}
-  .main-nav-tab{padding:.9rem 1.6rem;font-size:.85rem;font-weight:700;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-3px;color:var(--muted)}
-  .main-nav-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+  .main-nav{display:flex;gap:.3rem;background:var(--card);border-bottom:3px solid var(--border);padding:0 2rem}
+  .main-nav-tab{padding:.9rem 1.6rem;font-size:.85rem;font-weight:700;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-3px;color:var(--muted);border-radius:8px 8px 0 0;transition:all .15s}
+  .main-nav-tab:hover{background:rgba(37,99,235,.06);color:var(--text)}
+  .main-nav-tab.active{color:var(--accent);border-bottom-color:var(--accent);background:rgba(37,99,235,.08)}
   .view-section{display:none}
   .view-section.visible{display:block}
   .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:1.2rem}
-  .kpi{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem;box-shadow:var(--shadow)}
-  .kpi-label{font-size:.7rem;text-transform:uppercase;color:var(--muted);font-weight:600}
-  .kpi-val{font-size:1.4rem;font-weight:700}
+  .kpi{background:var(--card);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:10px;padding:1rem;box-shadow:var(--shadow);transition:transform .15s}
+  .kpi:hover{transform:translateY(-2px)}
+  .kpi:nth-child(2){border-left-color:var(--green)}
+  .kpi:nth-child(3){border-left-color:var(--orange,#d97706)}
+  .kpi-label{font-size:.7rem;text-transform:uppercase;color:var(--muted);font-weight:600;letter-spacing:.03em}
+  .kpi-val{font-size:1.5rem;font-weight:800;margin-top:.2rem}
+  select#filtro-quarter{border:1.5px solid var(--accent);color:var(--accent);font-weight:600;background:var(--card)}
 </style>
 </head>
 <body>
@@ -372,7 +381,7 @@ function consultarAsesor(ciudad) {
           <td>${f.fecha_pago || ''}</td>
           <td>${f.compra_eur != null ? f.compra_eur.toFixed(2) : ''}</td>
           <td>${f.venta_eur != null ? f.venta_eur.toFixed(2) : ''}</td>
-          <td>${f.margen_eur != null ? f.margen_eur.toFixed(2) : ''}</td>
+          <td class="${f.margen_eur >= 0 ? 'val-pos' : 'val-neg'}">${f.margen_eur != null ? f.margen_eur.toFixed(2) : ''}</td>
           ${comercialCell}
         `;
         tbody.appendChild(tr);
@@ -410,7 +419,7 @@ function consultarAsesor(ciudad) {
           <td>${datos.unidades}</td>
           <td>${datos.compra.toFixed(2)}</td>
           <td>${datos.venta.toFixed(2)}</td>
-          <td>${datos.margen.toFixed(2)}</td>
+          <td class="${datos.margen >= 0 ? 'val-pos' : 'val-neg'}">${datos.margen.toFixed(2)}</td>
         `;
         resumenBody.appendChild(tr);
       });
@@ -759,5 +768,6 @@ function crearFila(fila) {
   </script>
 </body>
 </html>
+
 
 
