@@ -151,12 +151,12 @@
         <canvas id="chartHistorico"></canvas>
       </div>
 
-      <div class="grid2">
+      <div class="grid2" id="grid-charts">
         <div class="chart-card">
           <h3 id="titulo-chart-precio">Precio previsto por ciudad</h3>
           <canvas id="chartPrecio"></canvas>
         </div>
-        <div class="chart-card">
+        <div class="chart-card" id="card-chart-region" style="display:none">
           <h3>Ciudades por región</h3>
           <canvas id="chartRegion"></canvas>
         </div>
@@ -460,6 +460,9 @@ document.getElementById("btn-guardar-todo").style.display = esSupervisor ? "none
         ? "Previsiones de todos los comerciales"
         : "Mis previsiones de precio";
       document.getElementById("th-comercial").style.display = esSupervisor ? "table-cell" : "none";
+
+      document.getElementById("card-chart-region").style.display = esSupervisor ? "block" : "none";
+      document.getElementById("grid-charts").style.gridTemplateColumns = esSupervisor ? "1fr 1fr" : "1fr";
 
       await cargarFilas();
     }
@@ -768,6 +771,7 @@ function crearFila(fila) {
   </script>
 </body>
 </html>
+
 
 
 
