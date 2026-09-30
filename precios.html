@@ -57,6 +57,15 @@
   .chart-card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:1.1rem}
   .chart-card h3{font-size:.85rem;margin:0 0 .8rem;font-weight:700}
   canvas{max-height:320px}
+  .main-nav{display:flex;gap:0;background:var(--card);border-bottom:3px solid var(--border);padding:0 2rem}
+  .main-nav-tab{padding:.9rem 1.6rem;font-size:.85rem;font-weight:700;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-3px;color:var(--muted)}
+  .main-nav-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+  .view-section{display:none}
+  .view-section.visible{display:block}
+  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:1.2rem}
+  .kpi{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem;box-shadow:var(--shadow)}
+  .kpi-label{font-size:.7rem;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .kpi-val{font-size:1.4rem;font-weight:700}
 </style>
 </head>
 <body>
@@ -90,7 +99,12 @@
       </div>
     </div>
 
-    <div class="container">
+    <div class="main-nav">
+      <div class="main-nav-tab active" id="tab-precios" onclick="switchView('precios', this)">Precios</div>
+      <div class="main-nav-tab" id="tab-comisiones" onclick="switchView('comisiones', this)">Comisiones</div>
+    </div>
+
+    <div class="container view-section visible" id="view-precios">
       <div class="top-bar">
         <h2 id="titulo-tabla">Mis previsiones de precio</h2>
         <button id="btn-anadir" class="btn btn-primary btn-sm" onclick="anadirFila()" style="width:auto">+ Añadir ciudad</button>
@@ -137,6 +151,34 @@
           <h3>Ciudades por región</h3>
           <canvas id="chartRegion"></canvas>
         </div>
+      </div>
+    </div>
+
+    <div class="container view-section" id="view-comisiones">
+      <div class="top-bar">
+        <h2 id="titulo-comisiones">Mis comisiones</h2>
+      </div>
+      <div class="kpi-row" id="kpi-comisiones"></div>
+      <div class="card">
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Trimestre</th>
+                <th>Cliente</th>
+                <th>Matrícula</th>
+                <th>SALE ID</th>
+                <th>Fecha pago</th>
+                <th>Compra €</th>
+                <th>Venta €</th>
+                <th>Margen €</th>
+                <th id="th-comercial-com" style="display:none">Comercial</th>
+              </tr>
+            </thead>
+            <tbody id="comisiones-body"></tbody>
+          </table>
+        </div>
+        <div id="comisiones-empty" class="empty-state" style="display:none">Todavía no hay comisiones cargadas.</div>
       </div>
     </div>
 
@@ -233,6 +275,66 @@ function consultarAsesor(ciudad) {
     }
 
     let esSupervisor = false;
+    let comisionesCargadas = false;
+
+    function switchView(view, el) {
+      document.querySelectorAll('.main-nav-tab').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+      document.getElementById('view-precios').classList.toggle('visible', view === 'precios');
+      document.getElementById('view-comisiones').classList.toggle('visible', view === 'comisiones');
+      if (view === 'comisiones' && !comisionesCargadas) {
+        cargarComisiones();
+        comisionesCargadas = true;
+      }
+    }
+
+    async function cargarComisiones() {
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      document.getElementById("th-comercial-com").style.display = esSupervisor ? "table-cell" : "none";
+      document.getElementById("titulo-comisiones").innerText = esSupervisor
+        ? "Comisiones de todos los comerciales"
+        : "Mis comisiones";
+
+      let query = supabaseClient.from("commissions").select("*").order("client");
+      if (!esSupervisor) query = query.eq("commercial_id", user.id);
+      const { data: filas, error } = await query;
+
+      if (error) {
+        document.getElementById("comisiones-empty").style.display = "block";
+        document.getElementById("comisiones-empty").innerText = "Error: " + error.message;
+        return;
+      }
+
+      const tbody = document.getElementById("comisiones-body");
+      tbody.innerHTML = "";
+      filas.forEach(f => {
+        const tr = document.createElement("tr");
+        const comercialCell = esSupervisor ? `<td>${f.commercial_name || ''}</td>` : "";
+        tr.innerHTML = `
+          <td>${f.quarter || ''}</td>
+          <td>${f.client || ''}</td>
+          <td>${f.matricula || ''}</td>
+          <td>${f.sale_id || ''}</td>
+          <td>${f.fecha_pago || ''}</td>
+          <td>${f.compra_eur != null ? f.compra_eur.toFixed(2) : ''}</td>
+          <td>${f.venta_eur != null ? f.venta_eur.toFixed(2) : ''}</td>
+          <td>${f.margen_eur != null ? f.margen_eur.toFixed(2) : ''}</td>
+          ${comercialCell}
+        `;
+        tbody.appendChild(tr);
+      });
+      document.getElementById("comisiones-empty").style.display = filas.length ? "none" : "block";
+      document.getElementById("comisiones-empty").innerText = "Todavía no hay comisiones cargadas.";
+
+      const totalUnidades = filas.length;
+      const totalMargen = filas.reduce((s, f) => s + (f.margen_eur || 0), 0);
+      const totalVenta = filas.reduce((s, f) => s + (f.venta_eur || 0), 0);
+      document.getElementById("kpi-comisiones").innerHTML = `
+        <div class="kpi"><div class="kpi-label">Unidades</div><div class="kpi-val">${totalUnidades}</div></div>
+        <div class="kpi"><div class="kpi-label">Venta total</div><div class="kpi-val">${totalVenta.toLocaleString('es-ES',{maximumFractionDigits:0})} €</div></div>
+        <div class="kpi"><div class="kpi-label">Margen total</div><div class="kpi-val">${totalMargen.toLocaleString('es-ES',{maximumFractionDigits:0})} €</div></div>
+      `;
+    }
 
     async function mostrarTabla() {
       const { data: { user } } = await supabaseClient.auth.getUser();
@@ -559,3 +661,4 @@ function crearFila(fila) {
   </script>
 </body>
 </html>
+
